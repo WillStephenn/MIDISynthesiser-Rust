@@ -470,6 +470,19 @@ impl Synthesiser {
         count
     }
 
+    /// Returns the number of voices that are not [`Idle`](crate::components::envelope::Stage::Idle),
+    /// i.e. currently in attack/decay/sustain/release and being processed
+    /// every block.
+    ///
+    /// Unlike [`get_active_notes`](Self::get_active_notes), this includes
+    /// voices in their release tail. A healthy voice pool returns to `0`
+    /// shortly after the last note's release completes; a value that never
+    /// drops back to `0` (or that grows monotonically under sustained MIDI
+    /// traffic) indicates a voice-lifecycle leak.
+    pub fn active_voice_count(&self) -> usize {
+        self.voices.iter().filter(|voice| voice.is_active()).count()
+    }
+
     /// Gets the current stereo pan position based on the LFO.
     ///
     /// Returns the pan position, ranging from -1.0 (left) to 1.0 (right).

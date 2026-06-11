@@ -117,19 +117,16 @@ impl Envelope {
     pub fn set_release_time(&mut self, seconds: f64) {
         assert!(seconds >= 0.0, "Release time cannot be negative.");
         self.release_time = seconds;
-        if self.release_time == 0.0 {
-            // sustain_level is already the total amount to change, so no increment needed
-            self.release_increment = self.sustain_level;
-        } else {
-            self.release_increment =
-                self.sustain_level * self.sample_rate_reciprocal / self.release_time;
-        }
     }
 
     /// Sets all parameters of the envelope.
     ///
-    /// Note the ordering: sustain is applied before decay/release so their
-    /// increments are derived from the new sustain level (matches Java).
+    /// Note the ordering: sustain is applied before decay so `decay_increment`
+    /// is derived from the new sustain level (matches Java).
+    /// `release_increment` is not derived here -- it is computed from
+    /// `current_multiplier` when [`note_off`](Self::note_off) fires, so the
+    /// release ramp always matches the level the envelope was at when
+    /// released.
     pub fn set_envelope(
         &mut self,
         attack_time: f64,
@@ -151,8 +148,27 @@ impl Envelope {
     }
 
     /// Triggers the release phase of the envelope when a note is released.
+    ///
+    /// The release ramp is derived from `current_multiplier` *at the moment
+    /// of release* (not from `sustain_level`), so a note released early
+    /// (during Attack or Decay, before reaching Sustain) still fades to
+    /// silence over `release_time` seconds. This also guarantees
+    /// `release_increment > 0` whenever there is anything to release, so the
+    /// envelope always reaches `Idle` -- previously, releasing during
+    /// Attack/Decay with `sustain_level == 0.0` produced a `release_increment`
+    /// of exactly `0.0`, leaving the envelope (and its voice) stuck in
+    /// `Release` forever.
     pub fn note_off(&mut self) {
-        self.current_stage = Stage::Release;
+        if self.current_multiplier <= 0.0 || self.release_time == 0.0 {
+            // Nothing left to release, or an instant release: drop straight to Idle.
+            self.current_multiplier = 0.0;
+            self.release_increment = 0.0;
+            self.current_stage = Stage::Idle;
+        } else {
+            self.release_increment =
+                self.current_multiplier * self.sample_rate_reciprocal / self.release_time;
+            self.current_stage = Stage::Release;
+        }
     }
 }
 
