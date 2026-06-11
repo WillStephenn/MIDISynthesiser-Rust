@@ -13,6 +13,13 @@ voice stealing), cpal/midir/midly for platform I/O, egui/eframe GUI.
   `Mutex<Synthesiser>` at most once per block.
 - Engine parameter setters are real-time safe: plain write + dirty flag, synced to voices at
   the start of `process_block`.
+- **Engine configuration is validated, not trusted.** The constants in
+  `utils::audio_constants` are user-tunable; every structural invariant (e.g. lookup table
+  size must be a power of two, voice count ≥ 1, buffer ≥ block) is checked at startup by the
+  config validation layer. An invalid value falls back to a documented safe default and
+  emits a warning that hosts must surface (GUI banner / CLI stderr) — never a panic, never
+  silent corruption. Real-time *feasibility* of a config is machine-dependent and cannot be
+  validated statically; that is the soak/performance tests' job.
 
 ## Commands
 
@@ -58,10 +65,14 @@ voice stealing), cpal/midir/midly for platform I/O, egui/eframe GUI.
 - Long-tail behaviour needs explicit tests: after note-off, render until silent and bound
   how long that takes; assert the voice actually returns to `Idle` rather than ringing
   forever at denormal amplitude.
-- Tests must not depend on `NUMBER_OF_VOICES`-style constants having specific values —
-  derive buffer sizes and note ranges from the constants so retuning the engine does not
-  break the suite. (This has already bitten once: a hardcoded 16-slot buffer broke when the
-  voice count changed to 32.)
+- **Tests parametrise over configuration; they never pin it.** Derive every buffer size,
+  note range, and timing from the constants/config so retuning the engine never requires
+  touching a test. (This has already bitten once: a hardcoded 16-slot buffer broke when the
+  voice count changed to 32.) Behaviours with config-dependent edge cases should be
+  exercised at the extremes of the *valid* ranges, not just the current values. Defining
+  and enforcing "valid" is the config validation layer's job (see architecture constraints)
+  and that layer is itself unit-tested: every invalid value falls back to its safe default
+  and produces a warning.
 
 ### Coverage
 
