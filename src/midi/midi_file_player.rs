@@ -114,7 +114,13 @@ impl MidiFilePlayer {
         let handle = std::thread::Builder::new()
             .name("midi-file-player".into())
             .spawn(move || {
-                play_events(&events, us_per_tick, tempo_scalable, &handler, &thread_running);
+                play_events(
+                    &events,
+                    us_per_tick,
+                    tempo_scalable,
+                    &handler,
+                    &thread_running,
+                );
                 thread_running.store(false, Ordering::Relaxed);
             })
             .ok()?;
@@ -134,14 +140,12 @@ impl MidiFilePlayer {
 /// in which case tempo meta events rescale the tick duration during playback.
 fn extract_events(smf: &Smf) -> (Vec<(u64, FileEvent)>, f64, bool) {
     let (us_per_tick, tempo_scalable) = match smf.header.timing {
-        Timing::Metrical(ticks_per_qn) => (
-            DEFAULT_TEMPO_US_PER_QN / ticks_per_qn.as_int() as f64,
-            true,
-        ),
-        Timing::Timecode(fps, subframe) => (
-            1_000_000.0 / (fps.as_f32() as f64 * subframe as f64),
-            false,
-        ),
+        Timing::Metrical(ticks_per_qn) => {
+            (DEFAULT_TEMPO_US_PER_QN / ticks_per_qn.as_int() as f64, true)
+        }
+        Timing::Timecode(fps, subframe) => {
+            (1_000_000.0 / (fps.as_f32() as f64 * subframe as f64), false)
+        }
     };
 
     let mut events: Vec<(u64, FileEvent)> = Vec::new();

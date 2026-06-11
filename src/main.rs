@@ -100,12 +100,10 @@ fn parse_args() -> Result<Option<Options>, String> {
             }
             "--list-devices" | "--list" => options.list_devices = true,
             "--audio-device" => {
-                options.audio_device =
-                    Some(args.next().ok_or("--audio-device requires a value")?);
+                options.audio_device = Some(args.next().ok_or("--audio-device requires a value")?);
             }
             "--midi-device" => {
-                options.midi_device =
-                    Some(args.next().ok_or("--midi-device requires a value")?);
+                options.midi_device = Some(args.next().ok_or("--midi-device requires a value")?);
             }
             "--play" => {
                 options.play_file = Some(args.next().ok_or("--play requires a file path")?);
@@ -144,8 +142,7 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             &audio_device_connector::get_audio_output_device_list(),
             "audio output",
         )?,
-        None => audio_device_connector::prompt_user()
-            .ok_or("No audio output device selected")?,
+        None => audio_device_connector::prompt_user().ok_or("No audio output device selected")?,
     };
     // The stream renders in the background; audio stops when it is dropped.
     let _stream =
@@ -214,15 +211,12 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 /// list (matching the interactive prompt numbering) or a device name.
 fn resolve_device(arg: &str, devices: &[String], kind: &str) -> Result<String, String> {
     if let Ok(index) = arg.parse::<usize>() {
-        return devices
-            .get(index.wrapping_sub(1))
-            .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Invalid {kind} device index {index}; {} device(s) available",
-                    devices.len()
-                )
-            });
+        return devices.get(index.wrapping_sub(1)).cloned().ok_or_else(|| {
+            format!(
+                "Invalid {kind} device index {index}; {} device(s) available",
+                devices.len()
+            )
+        });
     }
     // Pass names through even if not currently listed; the connectors handle
     // (and report) missing devices with their own fallback behaviour.

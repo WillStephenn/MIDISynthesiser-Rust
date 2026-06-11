@@ -87,7 +87,12 @@ impl Voice {
     ///
     /// # Panics
     /// Panics if `pitch_frequency` is negative or `sample_rate` is not positive.
-    pub fn new(waveform: Waveform, pitch_frequency: f64, sample_rate: f64, block_size: usize) -> Self {
+    pub fn new(
+        waveform: Waveform,
+        pitch_frequency: f64,
+        sample_rate: f64,
+        block_size: usize,
+    ) -> Self {
         assert!(
             pitch_frequency >= 0.0,
             "Initial pitch frequency cannot be negative."
@@ -130,7 +135,9 @@ impl Voice {
             .set_parameters(voice.filter_cutoff, voice.filter_resonance);
 
         // Set Oscillator starting pitch
-        voice.current_oscillator_mut().set_frequency(pitch_frequency);
+        voice
+            .current_oscillator_mut()
+            .set_frequency(pitch_frequency);
 
         voice
     }
@@ -346,8 +353,11 @@ impl Voice {
 
         // Filter Envelope
         start = Instant::now();
-        self.filter_envelope
-            .process_block(None, &mut self.filter_envelope_output_buffer, block_size);
+        self.filter_envelope.process_block(
+            None,
+            &mut self.filter_envelope_output_buffer,
+            block_size,
+        );
         *timings.entry("Filter Envelope").or_insert(0) += start.elapsed().as_nanos() as u64;
 
         // Pre-Filter Gain
@@ -361,7 +371,8 @@ impl Voice {
         start = Instant::now();
         let filter_env_value = self.filter_envelope_output_buffer[0];
         let final_cutoff = self.filter_cutoff + (filter_env_value * self.filter_mod_range);
-        self.filter.set_parameters(final_cutoff, self.filter_resonance);
+        self.filter
+            .set_parameters(final_cutoff, self.filter_resonance);
         *timings.entry("Filter Params").or_insert(0) += start.elapsed().as_nanos() as u64;
 
         // Filtering
@@ -413,8 +424,11 @@ impl AudioComponent for Voice {
             Waveform::Square => &mut self.square,
         };
         osc.process_block(None, &mut self.oscillator_output_buffer, block_size);
-        self.filter_envelope
-            .process_block(None, &mut self.filter_envelope_output_buffer, block_size);
+        self.filter_envelope.process_block(
+            None,
+            &mut self.filter_envelope_output_buffer,
+            block_size,
+        );
 
         // Apply Pre-Filter Gain Staging:
         for sample in self.oscillator_output_buffer.iter_mut().take(block_size) {
@@ -424,7 +438,8 @@ impl AudioComponent for Voice {
         // Set Filter Parameters
         let filter_env_value = self.filter_envelope_output_buffer[0];
         let final_cutoff = self.filter_cutoff + (filter_env_value * self.filter_mod_range);
-        self.filter.set_parameters(final_cutoff, self.filter_resonance);
+        self.filter
+            .set_parameters(final_cutoff, self.filter_resonance);
 
         // Apply Filter then Amp Env Processing
         self.filter.process_block(

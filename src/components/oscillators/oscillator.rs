@@ -79,7 +79,12 @@ impl OscillatorCore {
     /// `(int) phase & phaseMask` trick (`f64 as i32` saturates in Rust just as
     /// Java's narrowing double-to-int conversion does).
     #[inline]
-    pub fn process_table_block(&mut self, table: &[f64], output_buffer: &mut [f64], block_size: usize) {
+    pub fn process_table_block(
+        &mut self,
+        table: &[f64],
+        output_buffer: &mut [f64],
+        block_size: usize,
+    ) {
         for sample in output_buffer.iter_mut().take(block_size) {
             let index = (self.phase as i32 as usize) & PHASE_MASK;
             *sample = table[index];

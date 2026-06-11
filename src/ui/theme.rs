@@ -87,7 +87,10 @@ pub fn section_header(text: &str) -> egui::RichText {
 
 /// Styles a label like the CSS `.parameter-label` class (white, small, bold).
 pub fn parameter_label(text: &str) -> egui::RichText {
-    egui::RichText::new(text).color(WHITE_SMOKE).size(12.0).strong()
+    egui::RichText::new(text)
+        .color(WHITE_SMOKE)
+        .size(12.0)
+        .strong()
 }
 
 /// Styles a label like the CSS `.value-readout` class (orange, tiny).

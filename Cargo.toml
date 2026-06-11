@@ -19,3 +19,6 @@ path = "src/main.rs"
 
 [profile.release]
 opt-level = 3
+
+[dev-dependencies]
+egui_kittest = "0.34.3"

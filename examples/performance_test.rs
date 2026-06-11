@@ -54,10 +54,7 @@ fn run_standard_test() {
     }
 
     // Run processing loop
-    println!(
-        "Processing {} audio blocks...",
-        number_of_blocks_to_process
-    );
+    println!("Processing {} audio blocks...", number_of_blocks_to_process);
     let mut total_test_time_nanos: u64 = 0;
     for _ in 0..number_of_blocks_to_process {
         let block_start = Instant::now();

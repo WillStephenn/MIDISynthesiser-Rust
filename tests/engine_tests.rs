@@ -162,25 +162,25 @@ fn voice_stealing_replaces_oldest_note() {
     for i in 0..NUMBER_OF_VOICES {
         synth.note_on(60 + i as u8, 1.0);
     }
-    let mut notes = [0_u8; 16];
+    let mut notes = [0_u8; NUMBER_OF_VOICES];
     let count = synth.get_active_notes(&mut notes);
     assert_eq!(count, NUMBER_OF_VOICES);
 
-    // A ninth note must steal the oldest voice (note 60).
-    synth.note_on(80, 1.0);
+    // One more note than the pool holds must steal the oldest voice (note 60).
+    synth.note_on(100, 1.0);
     let count = synth.get_active_notes(&mut notes);
     assert_eq!(count, NUMBER_OF_VOICES);
     let active = &notes[..count];
-    assert!(active.contains(&80), "new note not active");
+    assert!(active.contains(&100), "new note not active");
     assert!(!active.contains(&60), "oldest note was not stolen");
     assert!(active.contains(&61), "newer note was wrongly stolen");
 
     // The next steal takes note 61, the new oldest.
-    synth.note_on(81, 1.0);
+    synth.note_on(101, 1.0);
     let count = synth.get_active_notes(&mut notes);
     let active = &notes[..count];
     assert!(!active.contains(&61));
-    assert!(active.contains(&80) && active.contains(&81));
+    assert!(active.contains(&100) && active.contains(&101));
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn note_off_releases_voice_and_renders_silence_when_idle() {
     assert!(buffer.iter().all(|&s| (-1.0..=1.0).contains(&s)));
 
     synth.note_off(64);
-    let mut notes = [0_u8; 16];
+    let mut notes = [0_u8; NUMBER_OF_VOICES];
     assert_eq!(
         synth.get_active_notes(&mut notes),
         0,
@@ -224,7 +224,7 @@ fn retriggering_same_note_does_not_consume_extra_voices() {
     // note_on for an already-sounding pitch first releases it (Java behaviour)
     synth.note_on(60, 1.0);
     synth.note_on(60, 1.0);
-    let mut notes = [0_u8; 16];
+    let mut notes = [0_u8; NUMBER_OF_VOICES];
     assert_eq!(synth.get_active_notes(&mut notes), 1);
     assert_eq!(notes[0], 60);
 }

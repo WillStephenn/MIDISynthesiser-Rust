@@ -322,9 +322,7 @@ impl SynthUiController {
                     });
                     ui.add_space(24.0);
                     ui.vertical(|ui| {
-                        ui.label(
-                            theme::parameter_label("AUDIO OUTPUT").color(theme::ORANGE_PEEL),
-                        );
+                        ui.label(theme::parameter_label("AUDIO OUTPUT").color(theme::ORANGE_PEEL));
                         new_audio = device_choice_box(
                             ui,
                             "audio_device",
@@ -491,9 +489,8 @@ impl eframe::App for SynthUiController {
             self.refresh_device_lists();
             self.last_device_scan = Instant::now();
         }
-        root.ctx().request_repaint_after(
-            scan_interval.saturating_sub(self.last_device_scan.elapsed()),
-        );
+        root.ctx()
+            .request_repaint_after(scan_interval.saturating_sub(self.last_device_scan.elapsed()));
 
         let mut changed = false;
 
@@ -509,9 +506,8 @@ impl eframe::App for SynthUiController {
                     changed |= section_box(&mut columns[0], theme::CHOCOLATE_COSMOS, |ui| {
                         self.oscillator_section(ui)
                     });
-                    changed |= section_box(&mut columns[1], theme::BLACK, |ui| {
-                        self.filter_section(ui)
-                    });
+                    changed |=
+                        section_box(&mut columns[1], theme::BLACK, |ui| self.filter_section(ui));
                     changed |= section_box(&mut columns[2], theme::CHOCOLATE_COSMOS, |ui| {
                         self.amp_envelope_section(ui)
                     });
