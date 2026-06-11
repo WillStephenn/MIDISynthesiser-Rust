@@ -36,10 +36,9 @@ use crate::midi::midi_device_connector;
 use crate::midi::midi_input_handler::ControlChangeCallback;
 use crate::ui::envelope_visualizer::{Adsr, EnvelopeVisualizer};
 use crate::ui::theme;
-use crate::utils::audio_constants::{
-    BLOCK_SIZE, DEVICE_SCAN_INTERVAL_SECONDS, NUMBER_OF_VOICES, SAMPLE_RATE,
-};
+use crate::utils::audio_constants::DEVICE_SCAN_INTERVAL_SECONDS;
 use crate::utils::audio_device_connector;
+use crate::utils::engine_config::{self, ConfigWarning};
 
 /// All four waveforms, for the choice boxes (Java used `Waveform.values()`).
 const WAVEFORMS: [Waveform; 4] = [
@@ -161,6 +160,13 @@ pub struct SynthUiController {
     state: UiState,
     amp_envelope_visualizer: EnvelopeVisualizer,
     filter_envelope_visualizer: EnvelopeVisualizer,
+
+    // Startup configuration-validation warnings (architecture constraint:
+    // "Engine configuration is validated, not trusted"). Shown as a
+    // dismissible banner; empty when every constant in `audio_constants` was
+    // valid.
+    config_warnings: Vec<ConfigWarning>,
+    config_warnings_dismissed: bool,
 }
 
 impl SynthUiController {
@@ -168,13 +174,15 @@ impl SynthUiController {
     /// theme, scans devices and auto-connects the first audio/MIDI device
     /// (the Java `initialize` + `setupDeviceSelectors`).
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let config = engine_config::validated_config();
         let synth = Arc::new(Mutex::new(Synthesiser::new(
-            NUMBER_OF_VOICES,
-            SAMPLE_RATE,
-            BLOCK_SIZE,
+            config.number_of_voices,
+            config.sample_rate,
+            config.block_size,
         )));
 
         let mut controller = Self::without_devices(synth, &cc.egui_ctx);
+        controller.set_config_warnings(engine_config::config_warnings().to_vec());
 
         // Scan for devices and select the first of each by default to kick
         // things off.
@@ -218,7 +226,22 @@ impl SynthUiController {
             state,
             amp_envelope_visualizer: EnvelopeVisualizer::default(),
             filter_envelope_visualizer: EnvelopeVisualizer::default(),
+            config_warnings: Vec::new(),
+            config_warnings_dismissed: false,
         }
+    }
+
+    /// Sets the startup configuration-validation warnings to show in the
+    /// banner (see [`Self::warning_banner`]).
+    ///
+    /// This is a test seam: [`Self::without_devices`] always starts with no
+    /// warnings, so GUI tests that want to exercise the banner call this
+    /// afterwards. Production startup ([`Self::new`]) calls this with
+    /// [`engine_config::config_warnings`]. Setting a non-empty list resets
+    /// the dismissed flag so the banner is shown.
+    pub fn set_config_warnings(&mut self, warnings: Vec<ConfigWarning>) {
+        self.config_warnings_dismissed = false;
+        self.config_warnings = warnings;
     }
 
     /// Changes the active audio output device. The previous stream is
@@ -309,6 +332,41 @@ impl SynthUiController {
     }
 
     // --- Panels -----------------------------------------------------------
+
+    /// Startup configuration-warning banner: an amber strip listing every
+    /// [`ConfigWarning`] produced while validating `audio_constants` (the
+    /// "Engine configuration is validated, not trusted" architecture
+    /// constraint). Hidden once dismissed or when there are no warnings.
+    fn warning_banner(&mut self, root: &mut egui::Ui) {
+        if self.config_warnings.is_empty() || self.config_warnings_dismissed {
+            return;
+        }
+
+        let frame = egui::Frame::new()
+            .fill(theme::AMBER)
+            .inner_margin(egui::Margin::symmetric(30, 10));
+        egui::Panel::top("config_warning_banner")
+            .frame(frame)
+            .show_separator_line(false)
+            .show_inside(root, |ui| {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(theme::warning_text(
+                            "Some startup settings were invalid and have been replaced with \
+                             safe defaults:",
+                        ));
+                        for warning in &self.config_warnings {
+                            ui.label(theme::warning_text(&format!("\u{2022} {warning}")));
+                        }
+                    });
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                        if ui.button("Dismiss").clicked() {
+                            self.config_warnings_dismissed = true;
+                        }
+                    });
+                });
+            });
+    }
 
     /// Header: title, subtitle and the MIDI/audio device dropdowns
     /// (the FXML `<top>` section).
@@ -521,6 +579,7 @@ impl eframe::App for SynthUiController {
 
         let mut changed = false;
 
+        self.warning_banner(root);
         self.header_panel(root);
         changed |= self.global_controls_panel(root);
 

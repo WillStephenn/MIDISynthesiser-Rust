@@ -26,6 +26,10 @@ pub const WHITE_SMOKE: Color32 = Color32::from_rgb(0xF2, 0xF4, 0xF3);
 pub const BURNT_ORANGE: Color32 = Color32::from_rgb(0xBA, 0x56, 0x24);
 /// Orange peel highlight colour (`#FF9F1C`).
 pub const ORANGE_PEEL: Color32 = Color32::from_rgb(0xFF, 0x9F, 0x1C);
+/// Amber warning colour, used for the startup configuration-warning banner.
+/// Not part of the original CSS palette; chosen to read as "warning" against
+/// the theme's dark backgrounds while staying close to its warm palette.
+pub const AMBER: Color32 = Color32::from_rgb(0xFF, 0xC1, 0x07);
 
 /// Applies the June's Logue theme to the egui context (the equivalent of
 /// attaching `junes_logue.css` to the JavaFX scene).
@@ -96,4 +100,10 @@ pub fn parameter_label(text: &str) -> egui::RichText {
 /// Styles a label like the CSS `.value-readout` class (orange, tiny).
 pub fn value_readout(text: &str) -> egui::RichText {
     egui::RichText::new(text).color(ORANGE_PEEL).size(10.0)
+}
+
+/// Styles a line of text in the startup configuration-warning banner: bold
+/// black-on-amber for strong "warning" contrast against the dark theme.
+pub fn warning_text(text: &str) -> egui::RichText {
+    egui::RichText::new(text).color(BLACK).size(13.0).strong()
 }

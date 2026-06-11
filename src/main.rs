@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use midi_synthesiser::core::synthesiser::Synthesiser;
 use midi_synthesiser::midi::{midi_device_connector, midi_file_player::MidiFilePlayer};
-use midi_synthesiser::utils::audio_constants::{BLOCK_SIZE, NUMBER_OF_VOICES, SAMPLE_RATE};
 use midi_synthesiser::utils::audio_device_connector;
+use midi_synthesiser::utils::engine_config;
 use midi_synthesiser::visualisation::ascii_renderer;
 
 /// Parsed command-line options.
@@ -77,6 +77,13 @@ fn main() {
         }
     };
 
+    // Engine configuration is validated, not trusted: report any constant
+    // that failed validation (and was replaced with its safe default) before
+    // doing anything else, so the user sees it regardless of front end.
+    for warning in engine_config::config_warnings() {
+        eprintln!("Warning: {warning}");
+    }
+
     if options.wants_cli() {
         if let Err(e) = run_cli(options) {
             eprintln!("Error: {e}");
@@ -129,10 +136,11 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     // The shared synthesiser: locked once per block by the audio callback,
     // briefly by MIDI handlers and the visualisation (as in the Java app,
     // where UI/MIDI threads called the synth directly under its locks).
+    let config = engine_config::validated_config();
     let synth = Arc::new(Mutex::new(Synthesiser::new(
-        NUMBER_OF_VOICES,
-        SAMPLE_RATE,
-        BLOCK_SIZE,
+        config.number_of_voices,
+        config.sample_rate,
+        config.block_size,
     )));
 
     // --- Audio output device ---

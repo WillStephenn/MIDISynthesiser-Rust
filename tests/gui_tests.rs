@@ -18,6 +18,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use midi_synthesiser::core::synthesiser::Synthesiser;
 use midi_synthesiser::ui::synth_ui_controller::SynthUiController;
 use midi_synthesiser::utils::audio_constants::{BLOCK_SIZE, NUMBER_OF_VOICES, SAMPLE_RATE};
+use midi_synthesiser::utils::engine_config::ConfigWarning;
 
 /// Builds a fresh [`Synthesiser`] with the production constants, matching
 /// what [`SynthUiController::new`] constructs in the real app.
@@ -165,4 +166,59 @@ fn click_at(harness: &Harness<'static, SynthUiController>, pos: eframe::egui::Po
         pressed: false,
         modifiers: eframe::egui::Modifiers::default(),
     });
+}
+
+// --- Startup configuration-warning banner -----------------------------------
+
+/// A representative [`ConfigWarning`], as `EngineConfig::validate_values`
+/// would produce for an out-of-range `block_size`.
+fn sample_warning() -> ConfigWarning {
+    ConfigWarning {
+        field: "block_size",
+        configured_value: "0".to_string(),
+        fallback_value: "256".to_string(),
+        reason: "must be in the range 1..=8192 frames".to_string(),
+    }
+}
+
+/// When the controller is given startup configuration warnings (the
+/// [`SynthUiController::set_config_warnings`] test seam), the warning banner
+/// is shown and its text names the affected field.
+#[test]
+fn config_warning_banner_shown_when_warnings_present() {
+    let synth = Arc::new(Mutex::new(new_synth()));
+    let mut harness = build_harness(synth);
+    harness
+        .state_mut()
+        .set_config_warnings(vec![sample_warning()]);
+
+    harness.run();
+
+    assert!(
+        harness
+            .query_by_label_contains("Some startup settings were invalid")
+            .is_some(),
+        "the configuration-warning banner should be shown when there are warnings"
+    );
+    assert!(
+        harness.query_by_label_contains("block_size").is_some(),
+        "the banner should name the field that failed validation"
+    );
+}
+
+/// With no startup configuration warnings (the default for
+/// [`SynthUiController::without_devices`]), no warning banner is drawn.
+#[test]
+fn config_warning_banner_absent_when_no_warnings() {
+    let synth = Arc::new(Mutex::new(new_synth()));
+    let mut harness = build_harness(synth);
+
+    harness.run();
+
+    assert!(
+        harness
+            .query_by_label_contains("Some startup settings were invalid")
+            .is_none(),
+        "the configuration-warning banner should not be shown when there are no warnings"
+    );
 }

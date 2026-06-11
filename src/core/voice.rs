@@ -11,12 +11,7 @@ use crate::components::oscillators::square_oscillator::SquareOscillator;
 use crate::components::oscillators::triangle_oscillator::TriangleOscillator;
 use crate::core::audio_component::AudioComponent;
 use crate::core::synthesiser::Waveform;
-use crate::utils::lookup_tables::{self, LookupTables, TABLE_SIZE};
-
-/// Pre-computed scalar mapping a pan position to a lookup-table index
-/// (equal-power pan law over the first quarter of the sine/cosine cycle).
-const PAN_INDEX_SCALAR: f64 =
-    TABLE_SIZE as f64 / (2.0 * std::f64::consts::PI) * (std::f64::consts::PI / 4.0);
+use crate::utils::lookup_tables::{self, LookupTables};
 
 /// Represents a single voice in the synthesiser, encapsulating all audio
 /// components required to generate a sound, including an oscillator, filter,
@@ -65,6 +60,10 @@ pub struct Voice {
 
     // Cached lookup tables (resolved once; no LazyLock access in the audio path)
     tables: &'static LookupTables,
+    /// Pre-computed scalar mapping a pan position to a lookup-table index
+    /// (equal-power pan law over the first quarter of the sine/cosine
+    /// cycle), derived from `tables.table_size` at construction time.
+    pan_index_scalar: f64,
 
     // Output Buffers
     oscillator_output_buffer: Vec<f64>,
@@ -97,6 +96,10 @@ impl Voice {
             pitch_frequency >= 0.0,
             "Initial pitch frequency cannot be negative."
         );
+        let tables = lookup_tables::tables();
+        let pan_index_scalar =
+            tables.table_size as f64 / (2.0 * std::f64::consts::PI) * (std::f64::consts::PI / 4.0);
+
         let mut voice = Voice {
             current_waveform: Waveform::Sine,
             sine: SineOscillator::new(sample_rate),
@@ -118,7 +121,8 @@ impl Voice {
             pan_position: 0.0,
             left_gain: 0.0,
             right_gain: 0.0,
-            tables: lookup_tables::tables(),
+            tables,
+            pan_index_scalar,
             oscillator_output_buffer: vec![0.0; block_size],
             filter_output_buffer: vec![0.0; block_size],
             filter_envelope_output_buffer: vec![0.0; block_size],
@@ -194,7 +198,7 @@ impl Voice {
         );
         // Apply the Pan Law
         self.pan_position = pan_position;
-        let index = ((pan_position + 1.0) * PAN_INDEX_SCALAR) as usize;
+        let index = ((pan_position + 1.0) * self.pan_index_scalar) as usize;
         self.left_gain = self.tables.cosine[index];
         self.right_gain = self.tables.sine[index];
     }

@@ -14,11 +14,7 @@
 //! shared base logic in one place) without inheritance.
 
 use crate::core::audio_component::AudioComponent;
-use crate::utils::lookup_tables::TABLE_SIZE;
-
-/// Bitmask used to wrap the integer phase index into the lookup table
-/// (`TABLE_SIZE` is a power of two).
-pub const PHASE_MASK: usize = TABLE_SIZE - 1;
+use crate::utils::lookup_tables;
 
 /// Represents an oscillator, which generates a periodic waveform at a
 /// specified frequency.
@@ -39,6 +35,13 @@ pub struct OscillatorCore {
 
     // Pre Computed Constant
     pub(crate) sample_rate_reciprocal: f64,
+
+    // Cached from the validated lookup-table size at construction time (no
+    // LazyLock access in the audio path).
+    table_size: usize,
+    /// Bitmask used to wrap the integer phase index into the lookup table
+    /// (`table_size` is a power of two, guaranteed by config validation).
+    phase_mask: usize,
 }
 
 impl OscillatorCore {
@@ -48,11 +51,14 @@ impl OscillatorCore {
     /// Panics if `sample_rate` is not positive.
     pub fn new(sample_rate: f64) -> Self {
         assert!(sample_rate > 0.0, "Sample rate must be positive.");
+        let table_size = lookup_tables::tables().table_size;
         OscillatorCore {
             phase: 0.0,
             frequency: 0.0,
             phase_increment: 0.0,
             sample_rate_reciprocal: 1.0 / sample_rate,
+            table_size,
+            phase_mask: table_size - 1,
         }
     }
 
@@ -70,14 +76,14 @@ impl OscillatorCore {
         assert!(frequency >= 0.0, "Frequency cannot be negative.");
         self.frequency = frequency;
         // Default Phase Increment Equation, override for non-linear oscillators
-        self.phase_increment = (TABLE_SIZE as f64 * frequency) * self.sample_rate_reciprocal;
+        self.phase_increment = (self.table_size as f64 * frequency) * self.sample_rate_reciprocal;
     }
 
     /// Fills the output buffer with `block_size` samples read from `table`,
     /// advancing the phase accumulator per sample. The integer phase index is
-    /// wrapped with [`PHASE_MASK`] to prevent overflow, matching the Java
-    /// `(int) phase & phaseMask` trick (`f64 as i32` saturates in Rust just as
-    /// Java's narrowing double-to-int conversion does).
+    /// wrapped with the cached `phase_mask` to prevent overflow, matching the
+    /// Java `(int) phase & phaseMask` trick (`f64 as i32` saturates in Rust
+    /// just as Java's narrowing double-to-int conversion does).
     #[inline]
     pub fn process_table_block(
         &mut self,
@@ -86,7 +92,7 @@ impl OscillatorCore {
         block_size: usize,
     ) {
         for sample in output_buffer.iter_mut().take(block_size) {
-            let index = (self.phase as i32 as usize) & PHASE_MASK;
+            let index = (self.phase as i32 as usize) & self.phase_mask;
             *sample = table[index];
             self.advance_phase();
         }

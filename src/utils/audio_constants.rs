@@ -10,7 +10,13 @@ pub const SAMPLE_RATE: f64 = 44100.0;
 pub const BLOCK_SIZE: usize = 32;
 
 /// The size of the output device buffer, in frames.
-pub const BUFFER_SIZE: usize = BLOCK_SIZE * 1;
+///
+/// Currently unused: `cpal` is configured with its default buffer size (see
+/// `utils::audio_device_connector`), and the engine always renders exactly
+/// `BLOCK_SIZE` frames per call to `Synthesiser::process_block`. Kept for
+/// future use (an explicit device buffer size) and validated at startup by
+/// `utils::engine_config` (must be `>= BLOCK_SIZE`) so it stays usable.
+pub const BUFFER_SIZE: usize = BLOCK_SIZE;
 
 /// The number of polyphonic voices in the synthesiser.
 pub const NUMBER_OF_VOICES: usize = 32;
