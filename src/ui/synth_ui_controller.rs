@@ -168,33 +168,18 @@ impl SynthUiController {
     /// theme, scans devices and auto-connects the first audio/MIDI device
     /// (the Java `initialize` + `setupDeviceSelectors`).
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        theme::apply(&cc.egui_ctx);
-
         let synth = Arc::new(Mutex::new(Synthesiser::new(
             NUMBER_OF_VOICES,
             SAMPLE_RATE,
             BLOCK_SIZE,
         )));
 
-        // Show the default patch on startup.
-        let state = UiState::read_from(&synth.lock().unwrap_or_else(|p| p.into_inner()));
+        let mut controller = Self::without_devices(synth, &cc.egui_ctx);
 
-        let mut controller = SynthUiController {
-            synth,
-            audio_stream: None,
-            midi_connection: None,
-            audio_devices: audio_device_connector::get_audio_output_device_list(),
-            midi_devices: midi_device_connector::get_midi_devices_list(),
-            selected_audio_device: None,
-            selected_midi_device: None,
-            last_device_scan: Instant::now(),
-            midi_sync_pending: Arc::new(AtomicBool::new(false)),
-            state,
-            amp_envelope_visualizer: EnvelopeVisualizer::default(),
-            filter_envelope_visualizer: EnvelopeVisualizer::default(),
-        };
-
-        // Select the first device by default to kick things off.
+        // Scan for devices and select the first of each by default to kick
+        // things off.
+        controller.audio_devices = audio_device_connector::get_audio_output_device_list();
+        controller.midi_devices = midi_device_connector::get_midi_devices_list();
         if let Some(first) = controller.audio_devices.first().cloned() {
             controller.change_audio_device(&first);
         }
@@ -203,6 +188,37 @@ impl SynthUiController {
         }
 
         controller
+    }
+
+    /// Builds a controller around an existing [`Synthesiser`], with no audio
+    /// stream, no MIDI connection and empty device lists.
+    ///
+    /// This is the seam used by GUI tests: it skips
+    /// [`audio_device_connector`]/[`midi_device_connector`] enumeration and
+    /// the auto-connect dance in [`Self::new`] entirely, so tests never touch
+    /// real hardware. `cpal::Stream` is `!Send` and is simply never created
+    /// here. Production startup ([`Self::new`]) calls this and then layers
+    /// device scanning/auto-connect on top.
+    pub fn without_devices(synth: Arc<Mutex<Synthesiser>>, ctx: &egui::Context) -> Self {
+        theme::apply(ctx);
+
+        // Show the default patch on startup.
+        let state = UiState::read_from(&synth.lock().unwrap_or_else(|p| p.into_inner()));
+
+        SynthUiController {
+            synth,
+            audio_stream: None,
+            midi_connection: None,
+            audio_devices: Vec::new(),
+            midi_devices: Vec::new(),
+            selected_audio_device: None,
+            selected_midi_device: None,
+            last_device_scan: Instant::now(),
+            midi_sync_pending: Arc::new(AtomicBool::new(false)),
+            state,
+            amp_envelope_visualizer: EnvelopeVisualizer::default(),
+            filter_envelope_visualizer: EnvelopeVisualizer::default(),
+        }
     }
 
     /// Changes the active audio output device. The previous stream is
@@ -279,6 +295,17 @@ impl SynthUiController {
     fn sync_ui_from_synth(&mut self) {
         let guard = self.synth.lock().unwrap_or_else(|p| p.into_inner());
         self.state = UiState::read_from(&guard);
+    }
+
+    /// Marks the UI as needing to re-read the synthesiser's parameters on the
+    /// next frame, exactly as the MIDI input thread's CC callback does (see
+    /// [`Self::change_midi_device`]).
+    ///
+    /// This is the seam GUI tests use to simulate "the MIDI thread changed a
+    /// parameter": mutate the [`Synthesiser`] directly, call this, then run a
+    /// frame and check that [`UiState`] picked up the change.
+    pub fn request_midi_resync(&self) {
+        self.midi_sync_pending.store(true, Ordering::Release);
     }
 
     // --- Panels -----------------------------------------------------------
