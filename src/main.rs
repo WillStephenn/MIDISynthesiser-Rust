@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use midi_synthesiser::core::synthesiser::Synthesiser;
 use midi_synthesiser::midi::{midi_device_connector, midi_file_player::MidiFilePlayer};
-use midi_synthesiser::utils::audio_constants::{BLOCK_SIZE, NUMBER_OF_VOICES, SAMPLE_RATE};
 use midi_synthesiser::utils::audio_device_connector;
+use midi_synthesiser::utils::engine_config;
 use midi_synthesiser::visualisation::ascii_renderer;
 
 /// Parsed command-line options.
@@ -77,6 +77,13 @@ fn main() {
         }
     };
 
+    // Engine configuration is validated, not trusted: report any constant
+    // that failed validation (and was replaced with its safe default) before
+    // doing anything else, so the user sees it regardless of front end.
+    for warning in engine_config::config_warnings() {
+        eprintln!("Warning: {warning}");
+    }
+
     if options.wants_cli() {
         if let Err(e) = run_cli(options) {
             eprintln!("Error: {e}");
@@ -100,12 +107,10 @@ fn parse_args() -> Result<Option<Options>, String> {
             }
             "--list-devices" | "--list" => options.list_devices = true,
             "--audio-device" => {
-                options.audio_device =
-                    Some(args.next().ok_or("--audio-device requires a value")?);
+                options.audio_device = Some(args.next().ok_or("--audio-device requires a value")?);
             }
             "--midi-device" => {
-                options.midi_device =
-                    Some(args.next().ok_or("--midi-device requires a value")?);
+                options.midi_device = Some(args.next().ok_or("--midi-device requires a value")?);
             }
             "--play" => {
                 options.play_file = Some(args.next().ok_or("--play requires a file path")?);
@@ -131,10 +136,11 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
     // The shared synthesiser: locked once per block by the audio callback,
     // briefly by MIDI handlers and the visualisation (as in the Java app,
     // where UI/MIDI threads called the synth directly under its locks).
+    let config = engine_config::validated_config();
     let synth = Arc::new(Mutex::new(Synthesiser::new(
-        NUMBER_OF_VOICES,
-        SAMPLE_RATE,
-        BLOCK_SIZE,
+        config.number_of_voices,
+        config.sample_rate,
+        config.block_size,
     )));
 
     // --- Audio output device ---
@@ -144,8 +150,7 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
             &audio_device_connector::get_audio_output_device_list(),
             "audio output",
         )?,
-        None => audio_device_connector::prompt_user()
-            .ok_or("No audio output device selected")?,
+        None => audio_device_connector::prompt_user().ok_or("No audio output device selected")?,
     };
     // The stream renders in the background; audio stops when it is dropped.
     let _stream =
@@ -214,15 +219,12 @@ fn run_cli(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 /// list (matching the interactive prompt numbering) or a device name.
 fn resolve_device(arg: &str, devices: &[String], kind: &str) -> Result<String, String> {
     if let Ok(index) = arg.parse::<usize>() {
-        return devices
-            .get(index.wrapping_sub(1))
-            .cloned()
-            .ok_or_else(|| {
-                format!(
-                    "Invalid {kind} device index {index}; {} device(s) available",
-                    devices.len()
-                )
-            });
+        return devices.get(index.wrapping_sub(1)).cloned().ok_or_else(|| {
+            format!(
+                "Invalid {kind} device index {index}; {} device(s) available",
+                devices.len()
+            )
+        });
     }
     // Pass names through even if not currently listed; the connectors handle
     // (and report) missing devices with their own fallback behaviour.

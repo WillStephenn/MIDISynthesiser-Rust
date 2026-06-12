@@ -2,7 +2,7 @@
 
 use crate::components::filters::filter::Filter;
 use crate::core::audio_component::AudioComponent;
-use crate::utils::lookup_tables::{self, LookupTables, RESONANCE_STEPS, TABLE_SIZE};
+use crate::utils::lookup_tables::{self, LookupTables, RESONANCE_STEPS};
 
 /// Implements a resonant low-pass filter using the Topology-Preserving Transform (TPT)
 /// State-Variable Filter (SVF) design by Vadim Zavalishin.
@@ -36,11 +36,12 @@ impl ResonantLowPassFilter {
     /// Panics if `sample_rate` is not positive.
     pub fn new(sample_rate: f64) -> Self {
         assert!(sample_rate > 0.0, "Sample rate must be positive.");
+        let tables = lookup_tables::tables();
         let mut filter = ResonantLowPassFilter {
             sample_rate,
             integrator1: 0.0,
             integrator2: 0.0,
-            cutoff_scalar: TABLE_SIZE as f64 / sample_rate,
+            cutoff_scalar: tables.table_size as f64 / sample_rate,
             resonance_scalar: (RESONANCE_STEPS - 1) as f64 / 19.0, // Resonance ranges from 1 to 20
             nyquist_limit: (sample_rate / 2.0) - 1.0,
             a1: 0.0,
@@ -48,7 +49,7 @@ impl ResonantLowPassFilter {
             a3: 0.0,
             prev_cutoff_index: -1,
             prev_resonance_index: -1,
-            tables: lookup_tables::tables(),
+            tables,
         };
         filter.set_parameters(1000.0, 1.0);
         filter

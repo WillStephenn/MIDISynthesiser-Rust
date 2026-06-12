@@ -108,7 +108,10 @@ impl Synthesiser {
     /// Panics if `no_voices` is zero or `sample_rate <= 40.0`.
     pub fn new(no_voices: usize, sample_rate: f64, block_size: usize) -> Self {
         assert!(no_voices > 0, "Number of voices must be positive.");
-        assert!(sample_rate > 40.0, "Sample rate must be greater than 40 Hz.");
+        assert!(
+            sample_rate > 40.0,
+            "Sample rate must be greater than 40 Hz."
+        );
 
         let voice_sum_attenuation = 1.0 / (no_voices as f64).sqrt();
 
@@ -218,7 +221,11 @@ impl Synthesiser {
             self.filter_sustain_level,
             self.filter_release_time,
         );
-        let (fc, fres, fmr) = (self.filter_cutoff, self.filter_resonance, self.filter_mod_range);
+        let (fc, fres, fmr) = (
+            self.filter_cutoff,
+            self.filter_resonance,
+            self.filter_mod_range,
+        );
         let (pre_db, post_db) = (self.pre_filter_gain_db, self.post_filter_gain_db);
         let pan_depth = self.pan_depth;
 
@@ -463,6 +470,19 @@ impl Synthesiser {
         count
     }
 
+    /// Returns the number of voices that are not [`Idle`](crate::components::envelope::Stage::Idle),
+    /// i.e. currently in attack/decay/sustain/release and being processed
+    /// every block.
+    ///
+    /// Unlike [`get_active_notes`](Self::get_active_notes), this includes
+    /// voices in their release tail. A healthy voice pool returns to `0`
+    /// shortly after the last note's release completes; a value that never
+    /// drops back to `0` (or that grows monotonically under sustained MIDI
+    /// traffic) indicates a voice-lifecycle leak.
+    pub fn active_voice_count(&self) -> usize {
+        self.voices.iter().filter(|voice| voice.is_active()).count()
+    }
+
     /// Gets the current stereo pan position based on the LFO.
     ///
     /// Returns the pan position, ranging from -1.0 (left) to 1.0 (right).
@@ -600,8 +620,11 @@ impl Synthesiser {
 
         if wf || fi || fe || ae || ga || pa {
             let wf_snap = self.waveform;
-            let (fc_snap, fr_snap, fmr_snap) =
-                (self.filter_cutoff, self.filter_resonance, self.filter_mod_range);
+            let (fc_snap, fr_snap, fmr_snap) = (
+                self.filter_cutoff,
+                self.filter_resonance,
+                self.filter_mod_range,
+            );
             let (fa_snap, fd_snap, fs_snap, frt_snap) = (
                 self.filter_attack_time,
                 self.filter_decay_time,
@@ -739,8 +762,7 @@ impl Synthesiser {
                 }
             }
         }
-        *timings.entry("Voice Processing & Mix").or_insert(0) +=
-            start.elapsed().as_nanos() as u64;
+        *timings.entry("Voice Processing & Mix").or_insert(0) += start.elapsed().as_nanos() as u64;
 
         // Update LFO position once per block (last sample)
         self.lfo_position = self.lfo_output_buffer[block_size - 1];

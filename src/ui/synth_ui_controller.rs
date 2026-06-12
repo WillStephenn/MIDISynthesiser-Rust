@@ -36,10 +36,9 @@ use crate::midi::midi_device_connector;
 use crate::midi::midi_input_handler::ControlChangeCallback;
 use crate::ui::envelope_visualizer::{Adsr, EnvelopeVisualizer};
 use crate::ui::theme;
-use crate::utils::audio_constants::{
-    BLOCK_SIZE, DEVICE_SCAN_INTERVAL_SECONDS, NUMBER_OF_VOICES, SAMPLE_RATE,
-};
+use crate::utils::audio_constants::DEVICE_SCAN_INTERVAL_SECONDS;
 use crate::utils::audio_device_connector;
+use crate::utils::engine_config::{self, ConfigWarning};
 
 /// All four waveforms, for the choice boxes (Java used `Waveform.values()`).
 const WAVEFORMS: [Waveform; 4] = [
@@ -161,6 +160,13 @@ pub struct SynthUiController {
     state: UiState,
     amp_envelope_visualizer: EnvelopeVisualizer,
     filter_envelope_visualizer: EnvelopeVisualizer,
+
+    // Startup configuration-validation warnings (architecture constraint:
+    // "Engine configuration is validated, not trusted"). Shown as a
+    // dismissible banner; empty when every constant in `audio_constants` was
+    // valid.
+    config_warnings: Vec<ConfigWarning>,
+    config_warnings_dismissed: bool,
 }
 
 impl SynthUiController {
@@ -168,33 +174,20 @@ impl SynthUiController {
     /// theme, scans devices and auto-connects the first audio/MIDI device
     /// (the Java `initialize` + `setupDeviceSelectors`).
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        theme::apply(&cc.egui_ctx);
-
+        let config = engine_config::validated_config();
         let synth = Arc::new(Mutex::new(Synthesiser::new(
-            NUMBER_OF_VOICES,
-            SAMPLE_RATE,
-            BLOCK_SIZE,
+            config.number_of_voices,
+            config.sample_rate,
+            config.block_size,
         )));
 
-        // Show the default patch on startup.
-        let state = UiState::read_from(&synth.lock().unwrap_or_else(|p| p.into_inner()));
+        let mut controller = Self::without_devices(synth, &cc.egui_ctx);
+        controller.set_config_warnings(engine_config::config_warnings().to_vec());
 
-        let mut controller = SynthUiController {
-            synth,
-            audio_stream: None,
-            midi_connection: None,
-            audio_devices: audio_device_connector::get_audio_output_device_list(),
-            midi_devices: midi_device_connector::get_midi_devices_list(),
-            selected_audio_device: None,
-            selected_midi_device: None,
-            last_device_scan: Instant::now(),
-            midi_sync_pending: Arc::new(AtomicBool::new(false)),
-            state,
-            amp_envelope_visualizer: EnvelopeVisualizer::default(),
-            filter_envelope_visualizer: EnvelopeVisualizer::default(),
-        };
-
-        // Select the first device by default to kick things off.
+        // Scan for devices and select the first of each by default to kick
+        // things off.
+        controller.audio_devices = audio_device_connector::get_audio_output_device_list();
+        controller.midi_devices = midi_device_connector::get_midi_devices_list();
         if let Some(first) = controller.audio_devices.first().cloned() {
             controller.change_audio_device(&first);
         }
@@ -203,6 +196,52 @@ impl SynthUiController {
         }
 
         controller
+    }
+
+    /// Builds a controller around an existing [`Synthesiser`], with no audio
+    /// stream, no MIDI connection and empty device lists.
+    ///
+    /// This is the seam used by GUI tests: it skips
+    /// [`audio_device_connector`]/[`midi_device_connector`] enumeration and
+    /// the auto-connect dance in [`Self::new`] entirely, so tests never touch
+    /// real hardware. `cpal::Stream` is `!Send` and is simply never created
+    /// here. Production startup ([`Self::new`]) calls this and then layers
+    /// device scanning/auto-connect on top.
+    pub fn without_devices(synth: Arc<Mutex<Synthesiser>>, ctx: &egui::Context) -> Self {
+        theme::apply(ctx);
+
+        // Show the default patch on startup.
+        let state = UiState::read_from(&synth.lock().unwrap_or_else(|p| p.into_inner()));
+
+        SynthUiController {
+            synth,
+            audio_stream: None,
+            midi_connection: None,
+            audio_devices: Vec::new(),
+            midi_devices: Vec::new(),
+            selected_audio_device: None,
+            selected_midi_device: None,
+            last_device_scan: Instant::now(),
+            midi_sync_pending: Arc::new(AtomicBool::new(false)),
+            state,
+            amp_envelope_visualizer: EnvelopeVisualizer::default(),
+            filter_envelope_visualizer: EnvelopeVisualizer::default(),
+            config_warnings: Vec::new(),
+            config_warnings_dismissed: false,
+        }
+    }
+
+    /// Sets the startup configuration-validation warnings to show in the
+    /// banner (see [`Self::warning_banner`]).
+    ///
+    /// This is a test seam: [`Self::without_devices`] always starts with no
+    /// warnings, so GUI tests that want to exercise the banner call this
+    /// afterwards. Production startup ([`Self::new`]) calls this with
+    /// [`engine_config::config_warnings`]. Setting a non-empty list resets
+    /// the dismissed flag so the banner is shown.
+    pub fn set_config_warnings(&mut self, warnings: Vec<ConfigWarning>) {
+        self.config_warnings_dismissed = false;
+        self.config_warnings = warnings;
     }
 
     /// Changes the active audio output device. The previous stream is
@@ -281,7 +320,53 @@ impl SynthUiController {
         self.state = UiState::read_from(&guard);
     }
 
+    /// Marks the UI as needing to re-read the synthesiser's parameters on the
+    /// next frame, exactly as the MIDI input thread's CC callback does (see
+    /// [`Self::change_midi_device`]).
+    ///
+    /// This is the seam GUI tests use to simulate "the MIDI thread changed a
+    /// parameter": mutate the [`Synthesiser`] directly, call this, then run a
+    /// frame and check that [`UiState`] picked up the change.
+    pub fn request_midi_resync(&self) {
+        self.midi_sync_pending.store(true, Ordering::Release);
+    }
+
     // --- Panels -----------------------------------------------------------
+
+    /// Startup configuration-warning banner: an amber strip listing every
+    /// [`ConfigWarning`] produced while validating `audio_constants` (the
+    /// "Engine configuration is validated, not trusted" architecture
+    /// constraint). Hidden once dismissed or when there are no warnings.
+    fn warning_banner(&mut self, root: &mut egui::Ui) {
+        if self.config_warnings.is_empty() || self.config_warnings_dismissed {
+            return;
+        }
+
+        let frame = egui::Frame::new()
+            .fill(theme::AMBER)
+            .inner_margin(egui::Margin::symmetric(30, 10));
+        egui::Panel::top("config_warning_banner")
+            .frame(frame)
+            .show_separator_line(false)
+            .show_inside(root, |ui| {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(theme::warning_text(
+                            "Some startup settings were invalid and have been replaced with \
+                             safe defaults:",
+                        ));
+                        for warning in &self.config_warnings {
+                            ui.label(theme::warning_text(&format!("\u{2022} {warning}")));
+                        }
+                    });
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                        if ui.button("Dismiss").clicked() {
+                            self.config_warnings_dismissed = true;
+                        }
+                    });
+                });
+            });
+    }
 
     /// Header: title, subtitle and the MIDI/audio device dropdowns
     /// (the FXML `<top>` section).
@@ -322,9 +407,7 @@ impl SynthUiController {
                     });
                     ui.add_space(24.0);
                     ui.vertical(|ui| {
-                        ui.label(
-                            theme::parameter_label("AUDIO OUTPUT").color(theme::ORANGE_PEEL),
-                        );
+                        ui.label(theme::parameter_label("AUDIO OUTPUT").color(theme::ORANGE_PEEL));
                         new_audio = device_choice_box(
                             ui,
                             "audio_device",
@@ -491,12 +574,12 @@ impl eframe::App for SynthUiController {
             self.refresh_device_lists();
             self.last_device_scan = Instant::now();
         }
-        root.ctx().request_repaint_after(
-            scan_interval.saturating_sub(self.last_device_scan.elapsed()),
-        );
+        root.ctx()
+            .request_repaint_after(scan_interval.saturating_sub(self.last_device_scan.elapsed()));
 
         let mut changed = false;
 
+        self.warning_banner(root);
         self.header_panel(root);
         changed |= self.global_controls_panel(root);
 
@@ -509,9 +592,8 @@ impl eframe::App for SynthUiController {
                     changed |= section_box(&mut columns[0], theme::CHOCOLATE_COSMOS, |ui| {
                         self.oscillator_section(ui)
                     });
-                    changed |= section_box(&mut columns[1], theme::BLACK, |ui| {
-                        self.filter_section(ui)
-                    });
+                    changed |=
+                        section_box(&mut columns[1], theme::BLACK, |ui| self.filter_section(ui));
                     changed |= section_box(&mut columns[2], theme::CHOCOLATE_COSMOS, |ui| {
                         self.amp_envelope_section(ui)
                     });

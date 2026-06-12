@@ -39,6 +39,7 @@ impl AudioComponent for TriangleOscillator {
         output_buffer: &mut [f64],
         block_size: usize,
     ) {
-        self.core.process_table_block(self.table, output_buffer, block_size);
+        self.core
+            .process_table_block(self.table, output_buffer, block_size);
     }
 }

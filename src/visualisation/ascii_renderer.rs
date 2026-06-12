@@ -19,7 +19,9 @@ const NOTE_NAMES: [&str; 12] = [
 pub fn clear_console() {
     let status = if cfg!(windows) {
         // For Windows, run the 'cls' command
-        std::process::Command::new("cmd").args(["/c", "cls"]).status()
+        std::process::Command::new("cmd")
+            .args(["/c", "cls"])
+            .status()
     } else {
         // For macOS and Linux, run the 'clear' command
         std::process::Command::new("clear").status()

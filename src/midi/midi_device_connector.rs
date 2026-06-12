@@ -138,9 +138,7 @@ pub fn connect_to_device_with_callback(
         };
         if name == device_name {
             let handler = match on_control_change {
-                Some(callback) => {
-                    MidiInputHandler::with_control_change_callback(synth, callback)
-                }
+                Some(callback) => MidiInputHandler::with_control_change_callback(synth, callback),
                 None => MidiInputHandler::new(synth),
             };
             match input.connect(

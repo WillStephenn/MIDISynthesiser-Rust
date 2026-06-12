@@ -191,8 +191,7 @@ impl EnvelopeVisualizer {
 
         // Convert screen coordinates to normalised envelope coordinates
         // (Y axis flipped), clamped to [0, 1].
-        let normalized_x =
-            (((pos.x - rect.left() - PADDING) / draw_width) as f64).clamp(0.0, 1.0);
+        let normalized_x = (((pos.x - rect.left() - PADDING) / draw_width) as f64).clamp(0.0, 1.0);
         let normalized_y =
             (1.0 - ((pos.y - rect.top() - PADDING) / draw_height) as f64).clamp(0.0, 1.0);
 

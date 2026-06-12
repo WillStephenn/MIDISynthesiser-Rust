@@ -160,8 +160,7 @@ pub fn start_output_stream(
     device_name: &str,
     synth: Arc<Mutex<Synthesiser>>,
 ) -> Result<cpal::Stream, Box<dyn std::error::Error>> {
-    let device =
-        get_output_device(device_name).ok_or("No audio output device available")?;
+    let device = get_output_device(device_name).ok_or("No audio output device available")?;
     start_output_stream_on(&device, synth)
 }
 
