@@ -42,23 +42,23 @@ pub struct LookupTables {
     /// validated lookup-table size; see [`table_size`]).
     pub table_size: usize,
     /// One cycle of a sine wave, `sin(2*pi*i/table_size)`.
-    pub sine: Vec<f64>,
+    pub sine: Box<[f64]>,
     /// One cycle of a cosine wave, `cos(2*pi*i/table_size)`.
-    pub cosine: Vec<f64>,
+    pub cosine: Box<[f64]>,
     /// One cycle of a square wave (+1.0 for the first half, -1.0 for the second).
-    pub square: Vec<f64>,
+    pub square: Box<[f64]>,
     /// One cycle of a saw wave, rising linearly from -1.0 to 1.0.
-    pub saw: Vec<f64>,
+    pub saw: Box<[f64]>,
     /// One cycle of a triangle wave, from -1.0 to 1.0.
-    pub triangle: Vec<f64>,
+    pub triangle: Box<[f64]>,
     /// `tan(pi*i/table_size)` for the TPT filter pre-warp (0 to pi).
-    pub tan_table: Vec<f64>,
+    pub tan_table: Box<[f64]>,
     /// TPT filter coefficient a1, indexed `[cutoff_index][resonance_index]`.
-    pub a1_table: Vec<[f64; RESONANCE_STEPS]>,
+    pub a1_table: Box<[[f64; RESONANCE_STEPS]]>,
     /// TPT filter coefficient a2, indexed `[cutoff_index][resonance_index]`.
-    pub a2_table: Vec<[f64; RESONANCE_STEPS]>,
+    pub a2_table: Box<[[f64; RESONANCE_STEPS]]>,
     /// TPT filter coefficient a3, indexed `[cutoff_index][resonance_index]`.
-    pub a3_table: Vec<[f64; RESONANCE_STEPS]>,
+    pub a3_table: Box<[[f64; RESONANCE_STEPS]]>,
     /// MIDI note number (0-127) to pitch in Hz (A440 equal temperament).
     pub midi_to_hz: [f64; 128],
 }
@@ -156,15 +156,15 @@ impl LookupTables {
 
         LookupTables {
             table_size: size,
-            sine,
-            cosine,
-            square,
-            saw,
-            triangle,
-            tan_table,
-            a1_table,
-            a2_table,
-            a3_table,
+            sine: sine.into_boxed_slice(),
+            cosine: cosine.into_boxed_slice(),
+            square: square.into_boxed_slice(),
+            saw: saw.into_boxed_slice(),
+            triangle: triangle.into_boxed_slice(),
+            tan_table: tan_table.into_boxed_slice(),
+            a1_table: a1_table.into_boxed_slice(),
+            a2_table: a2_table.into_boxed_slice(),
+            a3_table: a3_table.into_boxed_slice(),
             midi_to_hz,
         }
     }
