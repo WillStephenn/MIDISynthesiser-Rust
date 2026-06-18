@@ -89,8 +89,8 @@ pub struct Synthesiser {
 
     // Output Buffers
     block_size: usize,
-    voice_output_buffer: Vec<f64>,
-    lfo_output_buffer: Vec<f64>,
+    voice_output_buffer: Box<[f64]>,
+    lfo_output_buffer: Box<[f64]>,
 
     // Monotonic note-on clock (replaces Java's System.nanoTime(); strictly
     // increasing, so the "steal the oldest voice" comparison is identical).
@@ -158,8 +158,8 @@ impl Synthesiser {
             gain_dirty: AtomicBool::new(false),
             pan_dirty: AtomicBool::new(false),
             block_size,
-            voice_output_buffer: vec![0.0; block_size * 2],
-            lfo_output_buffer: vec![0.0; block_size],
+            voice_output_buffer: vec![0.0; block_size * 2].into_boxed_slice(),
+            lfo_output_buffer: vec![0.0; block_size].into_boxed_slice(),
             note_clock: 0,
         };
 
