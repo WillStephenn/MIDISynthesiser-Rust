@@ -66,10 +66,10 @@ pub struct Voice {
     pan_index_scalar: f64,
 
     // Output Buffers
-    oscillator_output_buffer: Vec<f64>,
-    filter_output_buffer: Vec<f64>,
-    filter_envelope_output_buffer: Vec<f64>,
-    amp_envelope_output_buffer: Vec<f64>,
+    oscillator_output_buffer: Box<[f64]>,
+    filter_output_buffer: Box<[f64]>,
+    filter_envelope_output_buffer: Box<[f64]>,
+    amp_envelope_output_buffer: Box<[f64]>,
 
     // Trackers
     note_on_time: u64,
@@ -123,10 +123,10 @@ impl Voice {
             right_gain: 0.0,
             tables,
             pan_index_scalar,
-            oscillator_output_buffer: vec![0.0; block_size],
-            filter_output_buffer: vec![0.0; block_size],
-            filter_envelope_output_buffer: vec![0.0; block_size],
-            amp_envelope_output_buffer: vec![0.0; block_size],
+            oscillator_output_buffer: vec![0.0; block_size].into_boxed_slice(),
+            filter_output_buffer: vec![0.0; block_size].into_boxed_slice(),
+            filter_envelope_output_buffer: vec![0.0; block_size].into_boxed_slice(),
+            amp_envelope_output_buffer: vec![0.0; block_size].into_boxed_slice(),
             note_on_time: 0,
         };
 
