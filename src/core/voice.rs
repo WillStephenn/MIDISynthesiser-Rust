@@ -111,7 +111,9 @@ impl Voice {
             filter_envelope: Envelope::new(sample_rate),
             pitch_midi: 0,
             pitch_frequency,
-            filter_cutoff: 20000.0,
+            // Wide open, but below the filter's Nyquist limit at low host
+            // sample rates (20 kHz alone would panic at <= 40 kHz).
+            filter_cutoff: 20000.0_f64.min(((sample_rate / 2.0) - 1.0).next_down()),
             filter_resonance: 1.0,
             filter_mod_range: 2000.0,
             velocity_mult: 1.0,

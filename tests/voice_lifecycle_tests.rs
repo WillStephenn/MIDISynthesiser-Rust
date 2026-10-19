@@ -309,3 +309,40 @@ fn fully_loaded_voice_pool_renders_within_real_time_budget() {
          budget {budget:?} for {NUMBER_OF_VOICES} voices @ {BLOCK_SIZE}-frame blocks"
     );
 }
+
+/// Plugin hosts choose the sample rate (`auval` renders at 22.05 kHz), so the
+/// engine must construct, play and release cleanly at every common rate,
+/// including rates whose Nyquist frequency is below the voice's default
+/// wide-open filter cutoff. The filter is pushed to the top of its range with
+/// full envelope modulation to exercise the Nyquist clamps.
+#[test]
+fn engine_plays_and_releases_at_common_host_sample_rates() {
+    for sample_rate in [
+        22050.0, 32000.0, 44100.0, 48000.0, 88200.0, 96000.0, 192000.0,
+    ] {
+        let context = format!("{sample_rate} Hz");
+        let mut synth = Synthesiser::new(NUMBER_OF_VOICES, sample_rate, BLOCK_SIZE);
+        synth.set_filter_cutoff(f64::MAX);
+        synth.set_filter_mod_range(f64::MAX);
+        let blocks_per_second = (sample_rate / BLOCK_SIZE as f64).ceil() as usize;
+        let mut buffer = vec![0.0; BLOCK_SIZE * 2];
+
+        synth.note_on(60, 1.0);
+        let mut peak: f64 = 0.0;
+        for _ in 0..blocks_per_second / 10 {
+            synth.process_block(&mut buffer);
+            assert_all_finite(&buffer, &context);
+            peak = buffer.iter().fold(peak, |p, s| p.max(s.abs()));
+        }
+        assert!(peak > 0.0, "silent output at {context}");
+
+        synth.note_off(60);
+        let release_blocks = blocks_per_second * (synth.amp_release_time().ceil() as usize + 1);
+        render_blocks(&mut synth, &mut buffer, release_blocks, &context);
+        assert_eq!(
+            synth.active_voice_count(),
+            0,
+            "voice stuck after release at {context}"
+        );
+    }
+}
