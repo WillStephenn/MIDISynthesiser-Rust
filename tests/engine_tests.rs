@@ -152,6 +152,37 @@ fn filter_stable_at_extreme_cutoff_and_resonance() {
     }
 }
 
+// --- Synthesiser / first note ---
+
+/// A note that arrives before the patch's waveform has been applied by the
+/// first `process_block` (the deferred dirty-flag sync) must still be a tone,
+/// not the flat output of an untuned oscillator.
+#[test]
+fn first_note_before_first_block_is_a_tone_not_dc() {
+    for waveform in [Waveform::Square, Waveform::Saw, Waveform::Triangle] {
+        let mut synth = Synthesiser::new(NUMBER_OF_VOICES, SR, BLOCK_SIZE);
+        synth.set_oscillator_waveform(waveform);
+        synth.set_amp_attack_time(0.0);
+        synth.set_amp_sustain_level(1.0);
+        synth.note_on(69, 1.0);
+
+        let mut buffer = vec![0.0_f64; BLOCK_SIZE * 2];
+        let mut left = Vec::new();
+        for _ in 0..40 {
+            synth.process_block(&mut buffer);
+            left.extend(buffer.chunks_exact(2).map(|f| f[0]));
+        }
+        let tail = &left[left.len() / 2..];
+        let mean = tail.iter().sum::<f64>() / tail.len() as f64;
+        let ac_rms =
+            (tail.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / tail.len() as f64).sqrt();
+        assert!(
+            ac_rms > 0.01,
+            "{waveform:?}: first note is DC/silent (ac rms {ac_rms})"
+        );
+    }
+}
+
 // --- Synthesiser / voice stealing ---
 
 #[test]

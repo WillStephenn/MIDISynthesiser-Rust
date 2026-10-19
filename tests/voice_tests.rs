@@ -3,8 +3,8 @@
 //! `Voice` is the engine's lower-level public API (see the testing
 //! philosophy): unit-testing it directly, independent of `Synthesiser`'s
 //! voice-allocation logic, is encouraged. These tests exercise note
-//! lifecycle, waveform/pitch handling (including the documented "only the
-//! selected oscillator is repointed" quirk), pan, gain staging, and the
+//! lifecycle, waveform/pitch handling (pitch is applied to every oscillator, so
+//! a waveform switch keeps the pitch), pan, gain staging, and the
 //! amp/filter envelope facade methods, all observed via `process_block`'s
 //! rendered output and the `is_active*`/getter public API.
 
@@ -136,90 +136,113 @@ fn oscillator_frequency_reflects_construction_pitch_not_later_set_oscillator_pit
     );
 }
 
-/// Documents the quirk called out in the voice design notes: switching the
-/// active waveform with `set_oscillator_waveform` does *not* retroactively
-/// apply the most recent `set_oscillator_pitch` to the newly-selected
-/// oscillator -- each of the four pre-built oscillators keeps whatever
-/// frequency it last had.
+/// `set_oscillator_pitch` tunes all four oscillators, so switching the
+/// active waveform afterwards plays at the voice's pitch rather than at the
+/// untuned 0 Hz (flat DC) or a stale pitch from an earlier note.
 ///
-/// Strategy: a voice is constructed with Sine selected at 220 Hz (so the saw
-/// oscillator is left at its constructor default of 0 Hz). After retargeting
-/// the pitch (which only updates the *sine* oscillator) and switching to Saw,
-/// the voice's rendered output must be identical to a fresh voice constructed
-/// directly with Saw at 0 Hz (both saw oscillators are at 0 Hz, untouched) --
-/// and different from a fresh voice constructed with Saw at 220 Hz.
+/// Strategy: a voice built with Sine @ 220 Hz is retargeted to 440 Hz and
+/// then switched to Saw; its output must match a fresh Saw voice built at
+/// 440 Hz (both saw oscillators start at phase 0), and the same must hold
+/// for Triangle when the pitch is set after the switch.
 #[test]
-fn set_oscillator_pitch_only_updates_the_selected_oscillator() {
+fn set_oscillator_pitch_tunes_every_oscillator() {
     let a3 = lookup_tables::tables().midi_to_hz[57]; // 220 Hz
     let a4_midi = 69; // 440 Hz
+    let a4 = lookup_tables::tables().midi_to_hz[a4_midi as usize];
 
-    // Voice A: built with Sine @ 220 Hz, then retargeted to 440 Hz (still
-    // Sine), then switched to Saw without ever calling set_oscillator_pitch
-    // while Saw is selected.
     let mut voice_a = audible_voice(Waveform::Sine, a3);
     voice_a.set_oscillator_pitch(a4_midi);
     voice_a.set_oscillator_waveform(Waveform::Saw);
+    let mut voice_b = audible_voice(Waveform::Saw, a4);
 
-    // Voice B: built directly with Saw @ 0 Hz (the constructor default for
-    // every oscillator other than the one matching the constructor's
-    // waveform argument).
-    let mut voice_b = audible_voice(Waveform::Saw, 0.0);
-
-    // Voice C: built directly with Saw @ 220 Hz, for contrast.
-    let mut voice_c = audible_voice(Waveform::Saw, a3);
-
-    for voice in [&mut voice_a, &mut voice_b, &mut voice_c] {
-        voice.note_on();
-    }
-
-    let mut out_a = vec![0.0_f64; BLOCK_SIZE * 2];
-    let mut out_b = vec![0.0_f64; BLOCK_SIZE * 2];
-    let mut out_c = vec![0.0_f64; BLOCK_SIZE * 2];
-    voice_a.process_block(None, &mut out_a, BLOCK_SIZE);
-    voice_b.process_block(None, &mut out_b, BLOCK_SIZE);
-    voice_c.process_block(None, &mut out_c, BLOCK_SIZE);
-
-    assert_all_finite(&out_a, "voice A (retargeted then switched to saw)");
-    assert_all_finite(&out_b, "voice B (fresh saw @ 0 Hz)");
-    assert_all_finite(&out_c, "voice C (fresh saw @ 220 Hz)");
-
-    assert_eq!(
-        out_a, out_b,
-        "switching to Saw after set_oscillator_pitch (while Sine was \
-         selected) must leave the saw oscillator at its untouched 0 Hz \
-         default, matching a voice constructed directly with Saw @ 0 Hz"
-    );
-    assert_ne!(
-        out_a, out_c,
-        "the retargeted-then-switched voice must NOT match a voice whose \
-         saw oscillator was actually given the 220 Hz pitch"
-    );
-
-    // A second, independent pair documents the other side of the quirk:
-    // calling set_oscillator_pitch *while Triangle is selected* DOES
-    // retarget the now-selected triangle oscillator, matching a fresh voice
-    // constructed directly with Triangle at the retargeted frequency.
-    let a4 = lookup_tables::tables().midi_to_hz[a4_midi as usize];
     let mut voice_e = audible_voice(Waveform::Sine, a3);
     voice_e.set_oscillator_waveform(Waveform::Triangle);
     voice_e.set_oscillator_pitch(a4_midi);
-    voice_e.note_on();
-
     let mut voice_f = audible_voice(Waveform::Triangle, a4);
-    voice_f.note_on();
 
-    let mut out_e = vec![0.0_f64; BLOCK_SIZE * 2];
-    let mut out_f = vec![0.0_f64; BLOCK_SIZE * 2];
-    voice_e.process_block(None, &mut out_e, BLOCK_SIZE);
-    voice_f.process_block(None, &mut out_f, BLOCK_SIZE);
-
-    assert_all_finite(&out_e, "voice E (switched to triangle, retargeted)");
+    let mut outs = Vec::new();
+    for voice in [&mut voice_a, &mut voice_b, &mut voice_e, &mut voice_f] {
+        voice.note_on();
+        let mut out = vec![0.0_f64; BLOCK_SIZE * 2];
+        voice.process_block(None, &mut out, BLOCK_SIZE);
+        assert_all_finite(&out, "retuned voice");
+        outs.push(out);
+    }
     assert_eq!(
-        out_e, out_f,
-        "calling set_oscillator_pitch while Triangle is selected must \
-         retarget the triangle oscillator, matching a voice constructed \
-         directly with Triangle at the retargeted frequency"
+        outs[0], outs[1],
+        "pitch set while Sine was selected must carry to Saw"
     );
+    assert_eq!(
+        outs[2], outs[3],
+        "pitch set while Triangle was selected must match a fresh Triangle voice"
+    );
+}
+
+/// Counts sign changes of the left channel of an interleaved stereo buffer.
+fn zero_crossings_left(stereo: &[f64]) -> usize {
+    let mut crossings = 0;
+    let mut prev = stereo[0] >= 0.0;
+    for frame in stereo.chunks_exact(2).skip(1) {
+        let cur = frame[0] >= 0.0;
+        if cur != prev {
+            crossings += 1;
+        }
+        prev = cur;
+    }
+    crossings
+}
+
+/// Holding a note and switching waveform must keep sounding a tone at the
+/// held pitch (not DC, not silence, not a stale pitch), including switching
+/// back to a waveform that played a different note earlier on this voice.
+#[test]
+fn waveform_switch_during_held_note_keeps_sounding_at_pitch() {
+    const SECONDS: f64 = 0.25;
+    let blocks = (SECONDS * SR / BLOCK_SIZE as f64) as usize;
+    let expected_crossings = 2.0 * 440.0 * (blocks * BLOCK_SIZE) as f64 / SR;
+
+    let waveforms = [
+        Waveform::Sine,
+        Waveform::Saw,
+        Waveform::Triangle,
+        Waveform::Square,
+    ];
+    for target in waveforms {
+        let mut voice = audible_voice(Waveform::Square, 0.0);
+        voice.set_amp_envelope(0.0, 0.0, 1.0, 0.1);
+        // An earlier note on this voice leaves a stale pitch on the
+        // oscillators when only the current one is tuned.
+        voice.set_oscillator_pitch(48);
+        voice.set_oscillator_waveform(target);
+        voice.set_oscillator_pitch(48);
+        voice.set_oscillator_waveform(Waveform::Square);
+
+        voice.set_oscillator_pitch(69); // A4, 440 Hz
+        voice.note_on();
+        let mut out = vec![0.0_f64; BLOCK_SIZE * 2];
+        voice.process_block(None, &mut out, BLOCK_SIZE);
+        voice.set_oscillator_waveform(target);
+
+        let mut rendered = Vec::new();
+        for _ in 0..blocks {
+            voice.process_block(None, &mut out, BLOCK_SIZE);
+            assert_all_finite(&out, "after waveform switch");
+            rendered.extend_from_slice(&out);
+        }
+        let left: Vec<f64> = rendered.chunks_exact(2).map(|f| f[0]).collect();
+        let mean = left.iter().sum::<f64>() / left.len() as f64;
+        let ac_rms =
+            (left.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / left.len() as f64).sqrt();
+        assert!(
+            ac_rms > 0.05,
+            "{target:?}: output after the switch is DC/silent (ac rms {ac_rms})"
+        );
+        let crossings = zero_crossings_left(&rendered) as f64;
+        assert!(
+            (crossings - expected_crossings).abs() <= expected_crossings * 0.05 + 2.0,
+            "{target:?}: {crossings} zero crossings, expected about {expected_crossings} for 440 Hz"
+        );
+    }
 }
 
 // --- Waveform coverage in process_block ---

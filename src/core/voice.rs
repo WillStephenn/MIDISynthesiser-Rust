@@ -139,22 +139,9 @@ impl Voice {
             .set_parameters(voice.filter_cutoff, voice.filter_resonance);
 
         // Set Oscillator starting pitch
-        voice
-            .current_oscillator_mut()
-            .set_frequency(pitch_frequency);
+        voice.set_all_oscillator_frequencies(pitch_frequency);
 
         voice
-    }
-
-    /// Returns the currently selected oscillator (the Java `this.oscillator`
-    /// reference).
-    fn current_oscillator_mut(&mut self) -> &mut dyn Oscillator {
-        match self.current_waveform {
-            Waveform::Sine => &mut self.sine,
-            Waveform::Saw => &mut self.saw,
-            Waveform::Triangle => &mut self.triangle,
-            Waveform::Square => &mut self.square,
-        }
     }
 
     // Facade Setter Methods
@@ -167,7 +154,17 @@ impl Voice {
         assert!(pitch_midi < 128, "MIDI pitch must be 0-127.");
         self.pitch_midi = pitch_midi;
         let frequency = self.tables.midi_to_hz[pitch_midi as usize];
-        self.current_oscillator_mut().set_frequency(frequency);
+        self.set_all_oscillator_frequencies(frequency);
+    }
+
+    /// Tunes all four oscillators, so a waveform switch (or a note that
+    /// arrives before the patch's waveform is applied) never lands on an
+    /// untuned one.
+    fn set_all_oscillator_frequencies(&mut self, frequency: f64) {
+        self.sine.set_frequency(frequency);
+        self.saw.set_frequency(frequency);
+        self.triangle.set_frequency(frequency);
+        self.square.set_frequency(frequency);
     }
 
     /// Selects which of the four pre-built oscillators is active.
