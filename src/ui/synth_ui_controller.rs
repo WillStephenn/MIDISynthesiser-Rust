@@ -34,7 +34,9 @@ use midir::MidiInputConnection;
 use crate::core::synthesiser::{Synthesiser, Waveform};
 use crate::midi::midi_device_connector;
 use crate::midi::midi_input_handler::ControlChangeCallback;
-use crate::ui::envelope_visualizer::{Adsr, EnvelopeVisualizer};
+use crate::ui::envelope_visualizer::{
+    Adsr, EnvelopeVisualizer, position_to_time, time_to_position,
+};
 use crate::ui::theme;
 use crate::utils::audio_constants::DEVICE_SCAN_INTERVAL_SECONDS;
 use crate::utils::audio_device_connector;
@@ -658,24 +660,42 @@ fn parameter_slider(
         .changed()
 }
 
+/// An envelope time slider (seconds, readout `0.000 s`) on the same log taper
+/// as the envelope graph, so short times get room and arrow keys step by equal
+/// ratios. The slider runs over `0..=1` and is mapped to seconds only when the
+/// user edits it, so an untouched value is never rounded through the taper.
+fn time_slider(ui: &mut egui::Ui, label: &str, seconds: &mut f64) -> bool {
+    ui.horizontal(|ui| {
+        ui.label(theme::parameter_label(label));
+        ui.label(theme::value_readout(&format!("{:.3} s", *seconds)));
+    });
+    ui.spacing_mut().slider_width = (ui.available_width() - 8.0).max(60.0);
+    let mut position = time_to_position(*seconds);
+    let changed = ui
+        .add(
+            egui::Slider::new(&mut position, 0.0..=1.0)
+                .show_value(false)
+                .smart_aim(false),
+        )
+        .changed();
+    if changed {
+        *seconds = position_to_time(position);
+    }
+    changed
+}
+
 /// The four ADSR sliders shared by the amp/filter envelope sections.
 fn adsr_sliders(ui: &mut egui::Ui, adsr: &mut Adsr) -> bool {
     let mut changed = false;
-    changed |= parameter_slider(ui, "ATTACK", &mut adsr.attack, 0.001..=5.0, |v| {
-        format!("{v:.3} s")
-    });
+    changed |= time_slider(ui, "ATTACK", &mut adsr.attack);
     ui.add_space(6.0);
-    changed |= parameter_slider(ui, "DECAY", &mut adsr.decay, 0.001..=5.0, |v| {
-        format!("{v:.3} s")
-    });
+    changed |= time_slider(ui, "DECAY", &mut adsr.decay);
     ui.add_space(6.0);
     changed |= parameter_slider(ui, "SUSTAIN", &mut adsr.sustain, 0.0..=1.0, |v| {
         format!("{v:.2}")
     });
     ui.add_space(6.0);
-    changed |= parameter_slider(ui, "RELEASE", &mut adsr.release, 0.001..=5.0, |v| {
-        format!("{v:.3} s")
-    });
+    changed |= time_slider(ui, "RELEASE", &mut adsr.release);
     changed
 }
 

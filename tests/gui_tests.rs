@@ -222,3 +222,48 @@ fn config_warning_banner_absent_when_no_warnings() {
         "the configuration-warning banner should not be shown when there are no warnings"
     );
 }
+
+// --- Envelope time sliders (log taper) --------------------------------------
+
+/// The ATTACK/DECAY/RELEASE sliders run over 0..=1 on the envelope graph's log
+/// taper: the amp attack slider reports the taper position of the synth's
+/// attack time, and a click mid-rail sets a time near the geometric middle of
+/// 1 ms..5 s (about 71 ms), not the linear middle (2.5 s).
+#[test]
+fn amp_attack_slider_uses_the_log_taper() {
+    use midi_synthesiser::ui::envelope_visualizer::time_to_position;
+
+    let synth = Arc::new(Mutex::new(new_synth()));
+    let default_attack = synth.lock().unwrap().amp_attack_time();
+    let mut harness = build_harness(Arc::clone(&synth));
+    harness.run();
+
+    let expected_position = time_to_position(default_attack);
+    let rect = {
+        let slider = harness
+            .root()
+            .get_all_by_role(eframe::egui::accesskit::Role::Slider)
+            .find(|node| {
+                let accesskit = node.accesskit_node();
+                accesskit.min_numeric_value() == Some(0.0)
+                    && accesskit.max_numeric_value() == Some(1.0)
+                    && accesskit
+                        .numeric_value()
+                        .is_some_and(|v| (v - expected_position).abs() < 1e-9)
+            })
+            .expect("a 0..=1 slider showing the attack's taper position should be present");
+        slider.rect()
+    };
+
+    click_at(
+        &harness,
+        eframe::egui::pos2(rect.center().x, rect.center().y),
+    );
+    harness.run();
+
+    let attack = synth.lock().unwrap().amp_attack_time();
+    assert!(
+        (0.03..0.15).contains(&attack),
+        "a mid-rail click should land near 71 ms on the log taper, got {attack}"
+    );
+}
