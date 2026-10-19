@@ -390,7 +390,7 @@ impl EnvelopeVisualizer {
             let centre =
                 (segment_start(segment, draw_width) + segment_end(segment, draw_width)) / 2.0;
             painter.text(
-                pos2(left + centre as f32, bottom + 9.0),
+                pos2(left + centre as f32, bottom + 13.0), // clear of the handles (radius 6) on the 0 line
                 Align2::CENTER_CENTER,
                 name,
                 font.clone(),
@@ -400,14 +400,14 @@ impl EnvelopeVisualizer {
 
         // Level axis labels
         painter.text(
-            pos2(left - 8.0, bottom),
+            pos2(left - 12.0, bottom), // clear of the A handle at 1 ms
             Align2::CENTER_CENTER,
             "0",
             font.clone(),
             TEXT_COLOR,
         );
         painter.text(
-            pos2(left - 8.0, top),
+            pos2(left - 12.0, top),
             Align2::CENTER_CENTER,
             "1",
             font,
