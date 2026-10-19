@@ -214,6 +214,54 @@ fn voice_stealing_replaces_oldest_note() {
     assert!(active.contains(&100) && active.contains(&101));
 }
 
+/// Stealing prefers releasing voices over held ones: a held note must survive
+/// a burst of short taps that overflows the pool.
+#[test]
+fn voice_stealing_prefers_releasing_voices_over_held_ones() {
+    let mut synth = Synthesiser::new(NUMBER_OF_VOICES, SR, BLOCK_SIZE);
+    synth.set_amp_attack_time(0.0);
+    synth.set_amp_sustain_level(1.0);
+    synth.set_amp_release_time(2.0);
+    let mut buffer = vec![0.0_f64; BLOCK_SIZE * 2];
+
+    // Hold the oldest note, then tap more notes than the pool can hold.
+    synth.note_on(40, 1.0);
+    for i in 0..(NUMBER_OF_VOICES + 2) {
+        let pitch = 60 + i as u8;
+        synth.note_on(pitch, 1.0);
+        synth.process_block(&mut buffer);
+        synth.note_off(pitch);
+        synth.process_block(&mut buffer);
+    }
+
+    let mut notes = [0_u8; NUMBER_OF_VOICES];
+    let count = synth.get_active_notes(&mut notes);
+    assert!(
+        notes[..count].contains(&40),
+        "held note was stolen while other voices were only releasing"
+    );
+
+    // With every voice held, the oldest held voice is still the one stolen.
+    let mut synth = Synthesiser::new(NUMBER_OF_VOICES, SR, BLOCK_SIZE);
+    for i in 0..NUMBER_OF_VOICES {
+        synth.note_on(60 + i as u8, 1.0);
+    }
+    // Render a block first: a note_off before any audio drops the voice straight to idle.
+    synth.process_block(&mut buffer);
+    synth.note_off(63);
+    synth.note_on(100, 1.0);
+    let count = synth.get_active_notes(&mut notes);
+    let active = &notes[..count];
+    assert!(
+        !active.contains(&63),
+        "the releasing voice should be stolen first"
+    );
+    assert!(
+        active.contains(&60),
+        "oldest held voice was stolen despite a releasing one"
+    );
+}
+
 #[test]
 fn note_off_releases_voice_and_renders_silence_when_idle() {
     let mut synth = Synthesiser::new(NUMBER_OF_VOICES, SR, BLOCK_SIZE);

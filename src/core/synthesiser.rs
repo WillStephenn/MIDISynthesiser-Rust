@@ -555,11 +555,12 @@ impl Synthesiser {
         // Find an inactive voice
         let mut target_index = self.voices.iter().position(|voice| !voice.is_active());
 
-        // If all voices are active, find the oldest one to steal
+        // If all voices are active, steal the oldest releasing voice, else the oldest held one
         if target_index.is_none() {
+            let steal_key = |voice: &Voice| (voice.is_active_no_release(), voice.note_on_time());
             let mut oldest = 0;
             for i in 1..self.voices.len() {
-                if self.voices[i].note_on_time() < self.voices[oldest].note_on_time() {
+                if steal_key(&self.voices[i]) < steal_key(&self.voices[oldest]) {
                     oldest = i;
                 }
             }
