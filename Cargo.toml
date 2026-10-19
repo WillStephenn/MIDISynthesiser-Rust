@@ -3,11 +3,18 @@ name = "midi-synthesiser"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Device I/O, MIDI file playback and the eframe GUI. Disable with
+# `default-features = false` to depend on the pure DSP engine only
+# (e.g. from the plugin crate in ../vst-port).
+default = ["standalone"]
+standalone = ["dep:cpal", "dep:eframe", "dep:midir", "dep:midly"]
+
 [dependencies]
-cpal = "0.18.1"
-eframe = "0.34.3"
-midir = "0.11.0"
-midly = "0.5.3"
+cpal = { version = "0.18.1", optional = true }
+eframe = { version = "0.34.3", optional = true }
+midir = { version = "0.11.0", optional = true }
+midly = { version = "0.5.3", optional = true }
 
 [lib]
 name = "midi_synthesiser"
@@ -16,6 +23,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "midi-synthesiser"
 path = "src/main.rs"
+required-features = ["standalone"]
 
 [profile.release]
 opt-level = 3

@@ -29,6 +29,10 @@ voice stealing), cpal/midir/midly for platform I/O, egui/eframe GUI.
   (requires `cargo install cargo-llvm-cov`)
 - Run: `cargo run` (GUI) · `cargo run -- --cli` (also `--list-devices`, `--play <file.mid>`, `--ascii`)
 - Performance check: `cargo run --release --example performance_test`
+- Engine-only build (what the plugin links): `cargo build --lib --no-default-features`. The
+  `standalone` feature (default) gates cpal/midir/midly/eframe and the `ui`,
+  `audio_device_connector`, `midi_device_connector` and `midi_file_player` modules.
+- Plugin (AU for Logic, CLAP, VST3): `../vst-port/build-au.sh` — see `../vst-port/README.md`.
 
 ## Testing philosophy
 

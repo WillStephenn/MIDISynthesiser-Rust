@@ -19,6 +19,7 @@
 pub mod components;
 pub mod core;
 pub mod midi;
+#[cfg(feature = "standalone")]
 pub mod ui;
 pub mod utils;
 pub mod visualisation;
