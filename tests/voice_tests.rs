@@ -182,7 +182,7 @@ fn set_oscillator_pitch_tunes_every_oscillator() {
 fn zero_crossings_left(stereo: &[f64]) -> usize {
     let mut crossings = 0;
     let mut prev = stereo[0] >= 0.0;
-    for frame in stereo.chunks_exact(2).skip(1) {
+    for frame in stereo.as_chunks::<2>().0.iter().skip(1) {
         let cur = frame[0] >= 0.0;
         if cur != prev {
             crossings += 1;
@@ -229,7 +229,7 @@ fn waveform_switch_during_held_note_keeps_sounding_at_pitch() {
             assert_all_finite(&out, "after waveform switch");
             rendered.extend_from_slice(&out);
         }
-        let left: Vec<f64> = rendered.chunks_exact(2).map(|f| f[0]).collect();
+        let left: Vec<f64> = rendered.as_chunks::<2>().0.iter().map(|f| f[0]).collect();
         let mean = left.iter().sum::<f64>() / left.len() as f64;
         let ac_rms =
             (left.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / left.len() as f64).sqrt();
@@ -286,7 +286,7 @@ fn pan_position_redistributes_stereo_channels() {
     fn channel_energy(buffer: &[f64]) -> (f64, f64) {
         let mut left = 0.0;
         let mut right = 0.0;
-        for chunk in buffer.chunks_exact(2) {
+        for chunk in buffer.as_chunks::<2>().0 {
             left += chunk[0] * chunk[0];
             right += chunk[1] * chunk[1];
         }
@@ -462,7 +462,9 @@ fn amp_envelope_individual_setters_reach_rendered_output() {
 fn filter_envelope_modulation_changes_output_brightness_over_time() {
     fn brightness(buffer: &[f64]) -> f64 {
         buffer
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| c[0]) // left channel mono samples
             .collect::<Vec<_>>()
             .windows(2)

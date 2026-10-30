@@ -170,7 +170,7 @@ fn first_note_before_first_block_is_a_tone_not_dc() {
         let mut left = Vec::new();
         for _ in 0..40 {
             synth.process_block(&mut buffer);
-            left.extend(buffer.chunks_exact(2).map(|f| f[0]));
+            left.extend(buffer.as_chunks::<2>().0.iter().map(|f| f[0]));
         }
         let tail = &left[left.len() / 2..];
         let mean = tail.iter().sum::<f64>() / tail.len() as f64;

@@ -291,7 +291,7 @@ impl EnvelopeVisualizer {
         let draw_height = rect.height() - 2.0 * PADDING;
         let left = rect.left() + PADDING;
         let top = rect.top() + PADDING;
-        let grid_stroke = Stroke::new(1.0, GRID_COLOR);
+        let grid_stroke = Stroke::new(1.0_f32, GRID_COLOR);
 
         // Vertical grid lines (time): 10 ms, 100 ms and 1 s in each time segment
         for segment in [ATTACK_SEGMENT, DECAY_SEGMENT, RELEASE_SEGMENT] {
@@ -307,7 +307,7 @@ impl EnvelopeVisualizer {
         }
 
         // Segment dividers
-        let divider = Stroke::new(1.0, CONTROL_POINT_COLOR.gamma_multiply(0.55));
+        let divider = Stroke::new(1.0_f32, CONTROL_POINT_COLOR.gamma_multiply(0.55));
         for segment in 1..4 {
             let x = left + segment_start(segment, draw_width as f64) as f32;
             painter.extend(egui::Shape::dashed_line(
@@ -322,7 +322,7 @@ impl EnvelopeVisualizer {
         painter.rect_stroke(
             Rect::from_min_size(pos2(left, top), Vec2::new(draw_width, draw_height)),
             0.0,
-            Stroke::new(2.0, CONTROL_POINT_COLOR),
+            Stroke::new(2.0_f32, CONTROL_POINT_COLOR),
             StrokeKind::Middle,
         );
     }
@@ -331,7 +331,7 @@ impl EnvelopeVisualizer {
     fn draw_envelope_curve(&self, painter: &egui::Painter, rect: Rect, adsr: &Adsr) {
         let [attack, decay, sustain, release] = control_point_positions(rect, adsr);
         let start = pos2(rect.left() + PADDING, rect.bottom() - PADDING);
-        let stroke = Stroke::new(3.0, CURVE_COLOR);
+        let stroke = Stroke::new(3.0_f32, CURVE_COLOR);
 
         painter.line_segment([start, attack], stroke); // Start to Attack
         painter.line_segment([attack, decay], stroke); // Attack to Decay
@@ -359,7 +359,7 @@ impl EnvelopeVisualizer {
                 pos,
                 CONTROL_POINT_RADIUS,
                 fill_color,
-                Stroke::new(1.0, TEXT_COLOR),
+                Stroke::new(1.0_f32, TEXT_COLOR),
             );
             painter.text(
                 pos,

@@ -41,36 +41,36 @@ pub fn apply(ctx: &egui::Context) {
     visuals.override_text_color = Some(WHITE_SMOKE);
     visuals.panel_fill = BLACK;
     visuals.window_fill = CHOCOLATE_COSMOS;
-    visuals.window_stroke = egui::Stroke::new(2.0, BURNT_ORANGE);
+    visuals.window_stroke = egui::Stroke::new(2.0_f32, BURNT_ORANGE);
     visuals.extreme_bg_color = BLACK; // slider track / text-edit background
 
     // Widget states (sliders, combo boxes, buttons).
     visuals.widgets.noninteractive.bg_fill = BLACK;
-    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, BURNT_ORANGE);
-    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, WHITE_SMOKE);
+    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, BURNT_ORANGE);
+    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, WHITE_SMOKE);
 
     visuals.widgets.inactive.bg_fill = BURNT_ORANGE; // slider handle
     visuals.widgets.inactive.weak_bg_fill = BLACK; // combo-box body
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(2.0, BURNT_ORANGE);
-    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, WHITE_SMOKE);
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(2.0_f32, BURNT_ORANGE);
+    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, WHITE_SMOKE);
 
     visuals.widgets.hovered.bg_fill = ORANGE_PEEL;
     visuals.widgets.hovered.weak_bg_fill = BLACK;
-    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(2.0, ORANGE_PEEL);
-    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, ORANGE_PEEL);
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(2.0_f32, ORANGE_PEEL);
+    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5_f32, ORANGE_PEEL);
 
     visuals.widgets.active.bg_fill = ORANGE_PEEL;
     visuals.widgets.active.weak_bg_fill = CHOCOLATE_COSMOS;
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, ORANGE_PEEL);
-    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.5, ORANGE_PEEL);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0_f32, ORANGE_PEEL);
+    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.5_f32, ORANGE_PEEL);
 
     visuals.widgets.open.bg_fill = CHOCOLATE_COSMOS;
     visuals.widgets.open.weak_bg_fill = CHOCOLATE_COSMOS;
-    visuals.widgets.open.bg_stroke = egui::Stroke::new(2.0, ORANGE_PEEL);
+    visuals.widgets.open.bg_stroke = egui::Stroke::new(2.0_f32, ORANGE_PEEL);
 
     // Selected items (combo-box menu hover/selection).
     visuals.selection.bg_fill = BURNT_ORANGE;
-    visuals.selection.stroke = egui::Stroke::new(1.0, ORANGE_PEEL);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, ORANGE_PEEL);
 
     // Fill the slider track up to the handle with the accent colour.
     visuals.slider_trailing_fill = true;
